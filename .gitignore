@@ -1,0 +1,5 @@
+# Raw data files (not for distribution)
+data/2024_rating_spreadsheet.xlsx
+data/nh_data_debug.json
+data/__pycache__/
+.DS_Store

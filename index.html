@@ -1,0 +1,1848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NH Legislature Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #0a0a0f;
+  color: #e0e0e0;
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+  user-select: none;
+}
+
+canvas#canvas {
+  display: block;
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  cursor: crosshair;
+}
+
+/* ── Top Bar ── */
+#top-bar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: rgba(10, 10, 20, 0.82);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  z-index: 100;
+}
+
+#top-bar h1 {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, #ffd60a, #3a86ff, #ff006e);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  white-space: nowrap;
+}
+
+#top-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#stats {
+  font-size: 11px;
+  font-weight: 500;
+  color: #777;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mode-toggle {
+  display: flex;
+  background: rgba(255,255,255,0.06);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.mode-btn {
+  padding: 5px 12px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #888;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mode-btn.active {
+  color: #fff;
+  background: rgba(255,255,255,0.1);
+}
+
+.mode-btn:hover:not(.active) { color: #bbb; }
+
+/* ── Panel ── */
+#panel {
+  position: fixed;
+  top: 56px;
+  right: 8px;
+  width: 300px;
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  background: rgba(14, 14, 24, 0.9);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 12px;
+  padding: 14px;
+  z-index: 100;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+#panel.hidden {
+  transform: translateX(320px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+#panel::-webkit-scrollbar { width: 4px; }
+#panel::-webkit-scrollbar-track { background: transparent; }
+#panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+
+#toggle-panel {
+  position: fixed;
+  top: 56px;
+  right: 8px;
+  z-index: 101;
+  background: rgba(14, 14, 24, 0.85);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 8px;
+  color: #aaa;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+#toggle-panel:hover { color: #fff; }
+
+.section-title {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  color: #5a5a6a;
+  margin: 14px 0 6px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.section-title:first-child { margin-top: 0; }
+
+/* ── Buttons ── */
+.btn {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.06);
+  color: #aaa;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn:hover { background: rgba(255,255,255,0.1); color: #ddd; }
+.btn.active, .btn.on { background: rgba(58, 134, 255, 0.2); color: #6eb0ff; border-color: rgba(58, 134, 255, 0.3); }
+.btn:disabled { opacity: 0.4; cursor: default; }
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.btn-primary {
+  background: rgba(58, 134, 255, 0.25);
+  color: #8ec5ff;
+  border-color: rgba(58, 134, 255, 0.3);
+  font-weight: 600;
+}
+.btn-primary:hover { background: rgba(58, 134, 255, 0.35); }
+
+/* ── Sliders ── */
+.slider-group { margin-bottom: 8px; }
+.slider-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 2px;
+}
+.slider-label span:last-child {
+  font-weight: 600;
+  color: #aaa;
+  font-variant-numeric: tabular-nums;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  background: #3a86ff;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid rgba(10,10,20,0.8);
+}
+
+/* ── Replay Controls ── */
+#replay-section { display: block; }
+#sandbox-section { display: none; }
+
+.bill-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+
+.bill-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ddd;
+  margin-bottom: 4px;
+}
+
+.bill-card-meta {
+  font-size: 10px;
+  color: #888;
+  line-height: 1.5;
+}
+
+.bill-card-result {
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 6px;
+}
+.bill-card-result.passed { color: #22c55e; }
+.bill-card-result.failed { color: #ef4444; }
+
+.progress-bar {
+  width: 100%;
+  height: 3px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  margin: 8px 0;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3a86ff, #06d6a0);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* ── Sandbox Sliders ── */
+.archetype-slider {
+  margin-bottom: 10px;
+}
+.archetype-slider-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+.archetype-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.archetype-slider-name {
+  font-size: 11px;
+  color: #aaa;
+  flex: 1;
+}
+.archetype-slider-val {
+  font-size: 11px;
+  font-weight: 600;
+  color: #ccc;
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
+  text-align: right;
+}
+
+/* ── Legend ── */
+.legend-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 3px;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #bbb;
+}
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.legend-count {
+  color: #666;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Tooltip ── */
+#tooltip {
+  position: fixed;
+  z-index: 150;
+  background: rgba(14, 14, 28, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 11.5px;
+  color: #ccc;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  max-width: 260px;
+  line-height: 1.5;
+}
+#tooltip.visible { opacity: 1; }
+#tooltip .tt-name { font-weight: 600; color: #fff; }
+#tooltip .tt-meta { color: #888; font-size: 10.5px; }
+
+/* ── Toast ── */
+#toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: rgba(14, 14, 28, 0.92);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #ddd;
+  opacity: 0;
+  transition: all 0.3s ease;
+  pointer-events: none;
+  z-index: 200;
+  white-space: nowrap;
+}
+#toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ── Built-by ── */
+#built-by {
+  position: fixed;
+  bottom: 12px;
+  right: 14px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 10px;
+  color: rgba(255,255,255,0.12);
+  text-decoration: none;
+  z-index: 50;
+  letter-spacing: 0.3px;
+}
+#built-by:hover { color: rgba(255,255,255,0.3); }
+
+/* ── Welcome ── */
+#welcome-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+#welcome-overlay.visible { opacity: 1; pointer-events: all; }
+#welcome-card {
+  background: rgba(18, 18, 32, 0.96);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 36px 32px 28px;
+  max-width: 460px;
+  width: 90%;
+  text-align: center;
+}
+#welcome-card h2 {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  background: linear-gradient(90deg, #ffd60a, #3a86ff, #ff006e);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+#welcome-card .subtitle {
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 16px;
+}
+#welcome-card p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #999;
+  margin-bottom: 20px;
+}
+#welcome-card .btn-row { justify-content: center; gap: 8px; }
+
+/* ── Bill Feed ── */
+#bill-feed {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 6px;
+}
+#bill-feed::-webkit-scrollbar { width: 3px; }
+#bill-feed::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+.feed-item {
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  color: #777;
+  cursor: pointer;
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.feed-item:hover { background: rgba(255,255,255,0.04); }
+.feed-item.current { background: rgba(58, 134, 255, 0.12); color: #aaa; }
+.feed-item.passed .feed-dot { background: #22c55e; }
+.feed-item.failed .feed-dot { background: #ef4444; }
+.feed-item .feed-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #444;
+  flex-shrink: 0;
+}
+.feed-item .feed-num { font-weight: 600; min-width: 50px; }
+
+/* ── Mobile ── */
+@media (max-width: 640px) {
+  #top-bar { padding: 0 10px; height: 44px; }
+  #top-bar h1 { font-size: 13px; letter-spacing: 1.5px; }
+  #stats { font-size: 10px; }
+  #panel {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-height: 50vh;
+    border-radius: 12px 12px 0 0;
+    padding: 12px;
+  }
+  #panel.hidden {
+    transform: translateY(100%);
+  }
+  #toggle-panel {
+    top: auto;
+    bottom: 8px;
+    right: 8px;
+  }
+}
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<!-- Top Bar -->
+<div id="top-bar">
+  <h1>NH Legislature</h1>
+  <div id="top-bar-right">
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="btn-replay" onclick="setMode('replay')">Replay</button>
+      <button class="mode-btn" id="btn-sandbox" onclick="setMode('sandbox')">Sandbox</button>
+    </div>
+    <div id="stats">
+      <span id="fps-display">60 fps</span> &middot;
+      <span id="particle-count">400</span>
+    </div>
+  </div>
+</div>
+
+<!-- Toggle Panel -->
+<button id="toggle-panel" style="display:none;" onclick="togglePanel()">Menu</button>
+
+<!-- Control Panel -->
+<div id="panel">
+
+  <!-- REPLAY SECTION -->
+  <div id="replay-section">
+    <div class="section-title">Replay &mdash; 2024 Session</div>
+
+    <div class="btn-row" style="margin-bottom:8px;">
+      <button class="btn btn-primary" id="btn-play" onclick="togglePlay()">&#9654; Play</button>
+      <button class="btn" id="btn-next" onclick="nextBill()">Next Bill</button>
+      <button class="btn" id="btn-reset-replay" onclick="resetReplay()">Reset</button>
+    </div>
+
+    <div class="slider-group">
+      <div class="slider-label"><span>Speed</span><span id="val-speed">1x</span></div>
+      <input type="range" id="sl-speed" min="1" max="4" step="1" value="1" oninput="setSpeed(this.value)">
+    </div>
+
+    <div id="replay-progress-label" style="font-size:10px;color:#777;margin-bottom:3px;">Bill 0 of 108</div>
+    <div class="progress-bar"><div class="progress-bar-fill" id="replay-progress" style="width:0%"></div></div>
+
+    <div id="current-bill-card" class="bill-card" style="display:none;">
+      <div class="bill-card-title" id="card-title">—</div>
+      <div class="bill-card-meta" id="card-meta">—</div>
+      <div class="bill-card-result" id="card-result"></div>
+    </div>
+
+    <div class="section-title">Bill Feed</div>
+    <div id="bill-feed"></div>
+  </div>
+
+  <!-- SANDBOX SECTION -->
+  <div id="sandbox-section">
+    <div class="section-title">Hypothetical Bill Builder</div>
+
+    <div style="font-size:10.5px;color:#777;margin-bottom:8px;">Pick a template or adjust sliders to create a custom bill, then drop it into the simulation.</div>
+
+    <div class="section-title">Template</div>
+    <div class="btn-row" id="template-btns"></div>
+
+    <div class="section-title">Archetype Reactions</div>
+    <div id="archetype-sliders"></div>
+
+    <div class="slider-group">
+      <div class="slider-label"><span>Bill Weight (Importance)</span><span id="val-weight">1.0</span></div>
+      <input type="range" id="sl-weight" min="0.2" max="2.0" step="0.1" value="1.0" oninput="document.getElementById('val-weight').textContent=parseFloat(this.value).toFixed(1)">
+    </div>
+
+    <div class="btn-row" style="margin-top:8px;">
+      <button class="btn btn-primary" onclick="dropHypotheticalBill()">Drop Bill</button>
+      <button class="btn" onclick="clearHypotheticals()">Clear All</button>
+    </div>
+  </div>
+
+  <!-- SHARED: Legend + Physics -->
+  <div class="section-title">Legend</div>
+  <div class="legend-grid" id="legend"></div>
+
+  <div class="section-title">Physics</div>
+  <div class="slider-group">
+    <div class="slider-label"><span>Interaction Range</span><span id="val-range">100</span></div>
+    <input type="range" id="sl-range" min="40" max="200" step="5" value="100" oninput="updatePhysics('range', this.value)">
+  </div>
+  <div class="slider-group">
+    <div class="slider-label"><span>Force Strength</span><span id="val-force">0.25</span></div>
+    <input type="range" id="sl-force" min="0.1" max="2.0" step="0.05" value="0.25" oninput="updatePhysics('force', this.value)">
+  </div>
+  <div class="slider-group">
+    <div class="slider-label"><span>Friction</span><span id="val-friction">0.20</span></div>
+    <input type="range" id="sl-friction" min="0.01" max="0.4" step="0.01" value="0.20" oninput="updatePhysics('friction', this.value)">
+  </div>
+
+  <div class="section-title">Visuals</div>
+  <div class="slider-group">
+    <div class="slider-label"><span>Trail Fade</span><span id="val-trail">0.06</span></div>
+    <input type="range" id="sl-trail" min="0.02" max="0.5" step="0.01" value="0.06" oninput="config.trailFade=parseFloat(this.value);document.getElementById('val-trail').textContent=parseFloat(this.value).toFixed(2)">
+  </div>
+  <div class="btn-row">
+    <button class="btn on" id="btn-glow" onclick="config.glow=!config.glow;this.textContent='Glow: '+(config.glow?'On':'Off');this.classList.toggle('on',config.glow)">Glow: On</button>
+    <button class="btn on" id="btn-chart" onclick="config.showChart=!config.showChart;this.textContent='Chart: '+(config.showChart?'On':'Off');this.classList.toggle('on',config.showChart)">Chart: On</button>
+    <button class="btn" onclick="togglePanel()">Hide</button>
+  </div>
+</div>
+
+<!-- Tooltip -->
+<div id="tooltip"></div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Built-by -->
+<a id="built-by" href="https://bargerdev.com" target="_blank" rel="noopener">Built by Barger Dev</a>
+
+<!-- Welcome Overlay -->
+<div id="welcome-overlay">
+  <div id="welcome-card">
+    <h2>NH Legislature Simulator</h2>
+    <div class="subtitle">400 Reps. 108 Bills. Real Data. Live Physics.</div>
+    <p>Every particle is a real NH House representative, positioned by their voting record. Watch bills enter as force fields that pull supporters together and push opponents apart — forming visible coalitions in real time.</p>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="dismissWelcome();togglePlay()">Replay 2024</button>
+      <button class="btn" onclick="dismissWelcome();setMode('sandbox')">Sandbox</button>
+      <button class="btn" onclick="dismissWelcome()">Watch</button>
+    </div>
+  </div>
+</div>
+
+<script src="data/nh_data.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════
+//  NH LEGISLATURE SIMULATOR — Engine + UI
+// ═══════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+// ── Configuration ──
+const config = {
+  range: 100,
+  force: 0.25,
+  friction: 0.20,
+  repulsionRadius: 28,
+  size: 2.8,
+  billSize: 8,
+  trailFade: 0.06,
+  glow: true,
+  showChart: true,
+  influenceRadius: 140,
+  billLifeFrames: 420,
+  billVoteFrames: 60,
+  billResolveFrames: 90,
+};
+
+// ── Species setup ──
+const NUM_ARCHETYPES = NH_DATA.archetypes.length;
+const NUM_BILL_TYPES = NH_DATA.billTypes.length;
+const TOTAL_SPECIES = NUM_ARCHETYPES + NUM_BILL_TYPES;
+
+const COLORS = [];
+const COLORS_RGB = [];
+NH_DATA.archetypes.forEach(a => {
+  COLORS.push(a.color);
+});
+NH_DATA.billTypes.forEach(bt => {
+  COLORS.push(bt.color);
+});
+COLORS.forEach(hex => {
+  COLORS_RGB.push({
+    r: parseInt(hex.slice(1,3), 16),
+    g: parseInt(hex.slice(3,5), 16),
+    b: parseInt(hex.slice(5,7), 16),
+  });
+});
+
+// ── Build rules matrix ──
+// Size: TOTAL_SPECIES x TOTAL_SPECIES
+let rules = [];
+function buildRulesMatrix() {
+  rules = [];
+  for (let i = 0; i < TOTAL_SPECIES; i++) {
+    rules[i] = new Array(TOTAL_SPECIES).fill(0);
+  }
+
+  // Legislator-to-legislator: from correlation matrix
+  const corr = NH_DATA.correlationMatrix;
+  for (let i = 0; i < NUM_ARCHETYPES; i++) {
+    for (let j = 0; j < NUM_ARCHETYPES; j++) {
+      // Scale correlation to moderate attraction/repulsion
+      // Keep same-species attraction mild so clusters don't collapse
+      let r = corr[i][j];
+      if (i === j) r = Math.min(r, 0.15); // Cap self-attraction low to prevent collapse
+      else r = r * 0.4; // Scale cross-species interactions
+      rules[i][j] = r;
+    }
+  }
+
+  // Bill-to-bill: slight repulsion
+  for (let i = NUM_ARCHETYPES; i < TOTAL_SPECIES; i++) {
+    for (let j = NUM_ARCHETYPES; j < TOTAL_SPECIES; j++) {
+      rules[i][j] = i === j ? -0.1 : -0.2;
+    }
+  }
+
+  // Legislator-to-bill and bill-to-legislator rules are set per-bill when spawned
+}
+
+// ── State ──
+let W, H;
+let particles = [];
+let paused = false;
+let mouseDown = false;
+let mouseRight = false;
+let mouseX = 0, mouseY = 0;
+
+// Active bills in the simulation
+let activeBills = []; // {particle, billData, phase, frameCount, simYes, simNo, resolved}
+
+// Replay state
+let replayMode = 'replay'; // 'replay' or 'sandbox'
+let replayPlaying = false;
+let replayIndex = -1;
+let replaySpeed = 1;
+let replayWaitFrames = 0;
+
+// Effects
+let flashes = [];
+let ripples = [];
+
+// Population tracking
+const POP_HISTORY_MAX = 400;
+let popHistory = [];
+let popSampleTimer = 0;
+
+// Hover tracking
+let hoveredParticle = null;
+
+// ── Spatial Hash ──
+let CELL_SIZE = 130;
+let grid = {};
+
+function hashKey(cx, cy) { return (cx * 73856093 ^ cy * 19349663) | 0; }
+function clearGrid() { grid = {}; }
+function insertParticle(p, idx) {
+  const cx = (p.x / CELL_SIZE) | 0;
+  const cy = (p.y / CELL_SIZE) | 0;
+  const key = hashKey(cx, cy);
+  if (!grid[key]) grid[key] = [];
+  grid[key].push(idx);
+}
+function getNeighborIndices(px, py) {
+  const cx = (px / CELL_SIZE) | 0;
+  const cy = (py / CELL_SIZE) | 0;
+  const result = [];
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      const bucket = grid[hashKey(cx + dx, cy + dy)];
+      if (bucket) for (let i = 0; i < bucket.length; i++) result.push(bucket[i]);
+    }
+  }
+  return result;
+}
+
+// ── Initialization ──
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+
+// Hemicycle layout: legislators arranged in a semicircular chamber
+// Left = progressive, Right = liberty, like a real legislature
+// Bills enter from the "podium" at top-center with downward momentum
+const HEMI_ORDER = [5, 4, 3, 2, 1, 0]; // Left→Right: PR, BD, ES, SC, FC, LH
+
+function getHemicycleCenter() {
+  return { x: W / 2, y: H * 0.62 };
+}
+function getHemicycleRadius() {
+  return Math.min(W, H) * 0.32;
+}
+function getPodiumPos() {
+  return { x: W / 2, y: H * 0.08 };
+}
+
+function createLegislatorParticles() {
+  particles = [];
+
+  const center = getHemicycleCenter();
+  const baseRadius = getHemicycleRadius();
+
+  // Count members per archetype for row allocation
+  const counts = new Array(NUM_ARCHETYPES).fill(0);
+  NH_DATA.legislators.forEach(l => counts[l.archetype]++);
+
+  // Assign angular center for each archetype
+  // Arc from π (left) to 0 (right), each archetype gets an equal wedge
+  const sliceAngle = Math.PI / HEMI_ORDER.length;
+  const archetypeAngle = {};
+  HEMI_ORDER.forEach((archIdx, i) => {
+    archetypeAngle[archIdx] = Math.PI - (i + 0.5) * sliceAngle;
+  });
+
+  // Track how many of each archetype we've placed (for row stacking)
+  const placed = new Array(NUM_ARCHETYPES).fill(0);
+
+  NH_DATA.legislators.forEach((leg, i) => {
+    const archIdx = leg.archetype;
+    const centerAngle = archetypeAngle[archIdx];
+    const count = counts[archIdx];
+    const idx = placed[archIdx]++;
+
+    // Arrange in concentric rows within the wedge
+    const cols = Math.ceil(Math.sqrt(count * 1.5));
+    const row = Math.floor(idx / cols);
+    const col = idx % cols;
+    const totalRows = Math.ceil(count / cols);
+
+    // Radial position: spread across rows from inner to outer
+    const radialSpread = baseRadius * 0.45;
+    const innerR = baseRadius - radialSpread * 0.5;
+    const r = innerR + (totalRows > 1 ? (row / (totalRows - 1)) * radialSpread : 0);
+
+    // Angular position: spread across columns within the wedge
+    const wedgeWidth = sliceAngle * 0.82;
+    const colsInRow = Math.min(cols, count - row * cols);
+    const angOffset = colsInRow > 1 ? (col / (colsInRow - 1) - 0.5) * wedgeWidth : 0;
+    const angle = centerAngle + angOffset;
+
+    // Add jitter for organic look
+    const jitterR = (Math.random() - 0.5) * 12;
+    const jitterA = (Math.random() - 0.5) * 0.04;
+
+    const finalR = r + jitterR;
+    const finalA = angle + jitterA;
+
+    const homeX = center.x + Math.cos(finalA) * finalR;
+    const homeY = center.y - Math.sin(finalA) * finalR;
+
+    particles.push({
+      x: homeX,
+      y: homeY,
+      homeX: homeX,
+      homeY: homeY,
+      vx: (Math.random() - 0.5) * 0.15,
+      vy: (Math.random() - 0.5) * 0.15,
+      species: archIdx,
+      isBill: false,
+      legIndex: i,
+    });
+  });
+
+  popHistory = [];
+  flashes = [];
+  ripples = [];
+}
+
+// ── Physics Step ──
+function step() {
+  const range = config.range;
+  const rangeSq = range * range;
+  const rMin = config.repulsionRadius;
+  const friction = 1 - config.friction;
+  const forceMul = config.force * 0.005;
+
+  CELL_SIZE = Math.max(range + 10, 80);
+
+  clearGrid();
+  for (let i = 0; i < particles.length; i++) {
+    insertParticle(particles[i], i);
+  }
+
+  for (let i = 0; i < particles.length; i++) {
+    const p = particles[i];
+    let fx = 0, fy = 0;
+
+    const neighbors = getNeighborIndices(p.x, p.y);
+    for (let ni = 0; ni < neighbors.length; ni++) {
+      const j = neighbors[ni];
+      if (i === j) continue;
+      const q = particles[j];
+
+      const dx = q.x - p.x;
+      const dy = q.y - p.y;
+      const distSq = dx * dx + dy * dy;
+      if (distSq > rangeSq || distSq < 0.01) continue;
+
+      const dist = Math.sqrt(distSq);
+      const attraction = rules[p.species][q.species];
+
+      let force;
+      if (dist < rMin) {
+        force = (dist / rMin - 1);
+      } else {
+        const midDist = (rMin + range) * 0.5;
+        const halfWidth = (range - rMin) * 0.5;
+        force = attraction * (1 - Math.abs(dist - midDist) / halfWidth);
+      }
+
+      // Bills get stronger forces — they're the main attractor/repulsor
+      const billBoost = (p.isBill || q.isBill) ? 3.0 : 1.0;
+
+      fx += (dx / dist) * force * billBoost;
+      fy += (dy / dist) * force * billBoost;
+    }
+
+    // Mouse interaction
+    if (mouseDown) {
+      const mdx = mouseX - p.x;
+      const mdy = mouseY - p.y;
+      const mdist = Math.sqrt(mdx * mdx + mdy * mdy);
+      if (mdist < 200 && mdist > 1) {
+        const mforce = mouseRight ? -0.6 : 0.4;
+        fx += (mdx / mdist) * mforce;
+        fy += (mdy / mdist) * mforce;
+      }
+    }
+
+    // Anchor spring: gently pull legislators toward hemicycle home positions
+    // Weaker when bills are active so particles visibly react to legislation
+    if (!p.isBill && p.homeX !== undefined) {
+      const hasBills = activeBills.length > 0;
+      const anchorStrength = hasBills ? 0.004 : 0.014;
+      fx += (p.homeX - p.x) * anchorStrength;
+      fy += (p.homeY - p.y) * anchorStrength;
+    }
+
+    p.vx = (p.vx + fx * forceMul * range) * friction;
+    p.vy = (p.vy + fy * forceMul * range) * friction;
+  }
+
+  // Update positions
+  for (let i = 0; i < particles.length; i++) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+
+    // Bounce off edges
+    if (p.x < 5) { p.x = 5; p.vx *= -0.5; }
+    if (p.x >= W - 5) { p.x = W - 6; p.vx *= -0.5; }
+    if (p.y < 50) { p.y = 50; p.vy *= -0.5; } // Below top bar
+    if (p.y >= H - 5) { p.y = H - 6; p.vy *= -0.5; }
+  }
+
+  // Update bill lifecycle
+  updateBills();
+
+  // Update flashes
+  for (let i = flashes.length - 1; i >= 0; i--) {
+    flashes[i].life -= 0.03;
+    if (flashes[i].life <= 0) flashes.splice(i, 1);
+  }
+
+  // Update ripples
+  for (let i = ripples.length - 1; i >= 0; i--) {
+    ripples[i].life -= 0.02;
+    if (ripples[i].life <= 0) ripples.splice(i, 1);
+  }
+
+  // Sample population history
+  popSampleTimer++;
+  if (popSampleTimer >= 4) {
+    popSampleTimer = 0;
+    const counts = new Array(NUM_ARCHETYPES).fill(0);
+    for (let i = 0; i < particles.length; i++) {
+      if (!particles[i].isBill && particles[i].species < NUM_ARCHETYPES) {
+        counts[particles[i].species]++;
+      }
+    }
+    popHistory.push(counts);
+    if (popHistory.length > POP_HISTORY_MAX) popHistory.shift();
+  }
+
+  // Replay auto-advance
+  if (replayPlaying && replayMode === 'replay') {
+    replayWaitFrames -= replaySpeed;
+    if (replayWaitFrames <= 0 && activeBills.length === 0) {
+      nextBill();
+    }
+  }
+}
+
+// ── Bill System ──
+function spawnBill(billData, isHypothetical) {
+  const billSpecies = NUM_ARCHETYPES + billData.billType;
+
+  // Set rules for this bill's interactions
+  const reactions = billData.archetypeReaction;
+  const weight = billData.weight || 1;
+  const scaleFactor = Math.min(1.5, 0.5 + weight * 0.25);
+
+  for (let arch = 0; arch < NUM_ARCHETYPES; arch++) {
+    const r = reactions[arch] * scaleFactor;
+    // How archetype reacts to bill
+    rules[arch][billSpecies] = r;
+    // How bill reacts to archetype (attracted to supporters, repelled from opponents)
+    rules[billSpecies][arch] = r * 0.6;
+  }
+
+  // Bills spawn from the podium (top center) with downward momentum
+  // They drift into the chamber and get pulled toward their supporters
+  const podium = getPodiumPos();
+  const center = getHemicycleCenter();
+
+  // Compute a horizontal bias from the reaction vector:
+  // positive reactions from right-leaning archetypes → drift right, etc.
+  const sliceAngle = Math.PI / HEMI_ORDER.length;
+  let xBias = 0;
+  HEMI_ORDER.forEach((archIdx, i) => {
+    const angle = Math.PI - (i + 0.5) * sliceAngle;
+    xBias += Math.cos(angle) * (reactions[archIdx] || 0);
+  });
+
+  const billParticle = {
+    x: podium.x + (Math.random() - 0.5) * 30,
+    y: podium.y,
+    vx: xBias * 0.6, // Drift toward supporting side
+    vy: 2.5, // Downward momentum into the chamber
+    species: billSpecies,
+    isBill: true,
+    billId: billData.id,
+  };
+
+  particles.push(billParticle);
+
+  const billState = {
+    particle: billParticle,
+    billData: billData,
+    phase: 'active', // active → vote → resolve
+    frameCount: 0,
+    simYes: 0,
+    simNo: 0,
+    resolved: false,
+    isHypothetical: isHypothetical || false,
+  };
+
+  activeBills.push(billState);
+
+  // Spawn ripple effect
+  ripples.push({
+    x: billParticle.x,
+    y: billParticle.y,
+    color: COLORS[billSpecies],
+    life: 1.0,
+  });
+
+  return billState;
+}
+
+function updateBills() {
+  for (let bi = activeBills.length - 1; bi >= 0; bi--) {
+    const bill = activeBills[bi];
+    bill.frameCount++;
+
+    if (bill.phase === 'active' && bill.frameCount >= config.billLifeFrames) {
+      // Transition to vote phase
+      bill.phase = 'vote';
+      bill.frameCount = 0;
+      countVotes(bill);
+    }
+    else if (bill.phase === 'vote' && bill.frameCount >= config.billVoteFrames) {
+      bill.phase = 'resolve';
+      bill.frameCount = 0;
+      resolveBill(bill);
+    }
+    else if (bill.phase === 'resolve' && bill.frameCount >= config.billResolveFrames) {
+      // Remove bill
+      removeBillParticle(bill);
+      activeBills.splice(bi, 1);
+    }
+  }
+}
+
+function countVotes(bill) {
+  const bp = bill.particle;
+  const influenceR = config.influenceRadius;
+  let yes = 0, no = 0;
+
+  // Use the original bill archetype reactions for vote counting
+  // This is more accurate than physics-based rules (which are scaled)
+  const reactions = bill.billData.archetypeReaction;
+
+  for (let i = 0; i < particles.length; i++) {
+    const p = particles[i];
+    if (p.isBill) continue;
+
+    const archReaction = reactions[p.species] || 0;
+
+    // Primary: vote based on archetype affinity (the real data)
+    // Secondary: proximity provides a small bonus/penalty
+    const dx = p.x - bp.x;
+    const dy = p.y - bp.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const proximityBonus = dist < influenceR ? 0.15 : -0.05;
+
+    const voteScore = archReaction + proximityBonus;
+
+    if (voteScore > 0) {
+      yes++;
+    } else {
+      no++;
+    }
+  }
+
+  bill.simYes = yes;
+  bill.simNo = no;
+}
+
+function resolveBill(bill) {
+  const totalLegs = particles.filter(p => !p.isBill).length;
+  const passed = bill.simYes > totalLegs / 2;
+  bill.resolved = true;
+  bill.simPassed = passed;
+
+  // Flash effect
+  const bp = bill.particle;
+  const color = passed ? '#22c55e' : '#ef4444';
+
+  for (let i = 0; i < 3; i++) {
+    flashes.push({
+      x: bp.x + (Math.random() - 0.5) * 20,
+      y: bp.y + (Math.random() - 0.5) * 20,
+      color: color,
+      life: 1.0,
+    });
+  }
+
+  // Toast
+  const bd = bill.billData;
+  const simResult = passed ? 'PASSED' : 'FAILED';
+  const actualResult = bd.outcome ? bd.outcome.toUpperCase() : '';
+  const match = (passed && bd.outcome === 'passed') || (!passed && bd.outcome === 'failed');
+
+  let msg = `${bd.billNumber}: Sim ${simResult} (${bill.simYes}-${bill.simNo})`;
+  if (actualResult && !bill.isHypothetical) {
+    msg += ` | Actual: ${actualResult} (${bd.yeas}-${bd.nays})`;
+    if (match) msg += ' ✓';
+  }
+  showToast(msg);
+
+  // Update bill card
+  updateBillCard(bill);
+
+  // Update feed item
+  updateFeedItem(bill);
+
+  // Set wait before next bill in replay
+  replayWaitFrames = 60;
+}
+
+function removeBillParticle(bill) {
+  const idx = particles.indexOf(bill.particle);
+  if (idx >= 0) {
+    particles.splice(idx, 1);
+  }
+
+  // Clean up rules for this bill species
+  const billSpecies = bill.particle.species;
+  for (let i = 0; i < TOTAL_SPECIES; i++) {
+    rules[i][billSpecies] = 0;
+    rules[billSpecies][i] = 0;
+  }
+  // Re-set bill-to-bill repulsion
+  for (let i = NUM_ARCHETYPES; i < TOTAL_SPECIES; i++) {
+    for (let j = NUM_ARCHETYPES; j < TOTAL_SPECIES; j++) {
+      rules[i][j] = i === j ? -0.1 : -0.2;
+    }
+  }
+}
+
+// ── Rendering ──
+function render() {
+  // Trail fade
+  ctx.fillStyle = `rgba(10, 10, 15, ${config.trailFade})`;
+  ctx.fillRect(0, 0, W, H);
+
+  // Draw chamber structure (faint hemicycle arc + podium)
+  const hCenter = getHemicycleCenter();
+  const hRadius = getHemicycleRadius();
+  const podium = getPodiumPos();
+
+  // Hemicycle arc (faint)
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(hCenter.x, hCenter.y, hRadius - hRadius * 0.22, 0, Math.PI);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(hCenter.x, hCenter.y, hRadius + hRadius * 0.22, 0, Math.PI);
+  ctx.stroke();
+
+  // Podium marker (where bills enter)
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  ctx.beginPath();
+  ctx.arc(podium.x, podium.y, 6, 0, Math.PI * 2);
+  ctx.fill();
+  // Faint line from podium to chamber
+  ctx.strokeStyle = 'rgba(255,255,255,0.025)';
+  ctx.setLineDash([4, 8]);
+  ctx.beginPath();
+  ctx.moveTo(podium.x, podium.y + 8);
+  ctx.lineTo(hCenter.x, hCenter.y - hRadius * 0.3);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  const size = config.size;
+  const glow = config.glow;
+
+  if (glow) ctx.shadowBlur = size * 2.5;
+
+  // Draw legislator particles — batch by species
+  for (let s = 0; s < NUM_ARCHETYPES; s++) {
+    const c = COLORS[s];
+    ctx.fillStyle = c;
+    if (glow) ctx.shadowColor = c;
+    ctx.beginPath();
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      if (p.isBill || p.species !== s) continue;
+      ctx.moveTo(p.x + size, p.y);
+      ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+    }
+    ctx.fill();
+  }
+
+  ctx.shadowBlur = 0;
+
+  // Draw bill particles
+  for (const bill of activeBills) {
+    const bp = bill.particle;
+    const bs = bp.species;
+    const c = COLORS[bs];
+    const rgb = COLORS_RGB[bs];
+
+    let alpha = 1;
+    let scale = 1;
+
+    if (bill.phase === 'resolve') {
+      const progress = bill.frameCount / config.billResolveFrames;
+      alpha = 1 - progress;
+      scale = bill.simPassed ? 1 + progress * 0.5 : 1 - progress * 0.6;
+    }
+
+    const bSize = config.billSize * scale;
+
+    // Influence radius ring
+    if (bill.phase === 'active' || bill.phase === 'vote') {
+      const pulsePhase = (bill.frameCount % 60) / 60;
+      const ringAlpha = 0.08 + 0.04 * Math.sin(pulsePhase * Math.PI * 2);
+      ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${ringAlpha * alpha})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(bp.x, bp.y, config.influenceRadius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Bill diamond shape
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = c;
+    ctx.strokeStyle = `rgba(255,255,255,${0.4 * alpha})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(bp.x, bp.y - bSize);
+    ctx.lineTo(bp.x + bSize * 0.7, bp.y);
+    ctx.lineTo(bp.x, bp.y + bSize);
+    ctx.lineTo(bp.x - bSize * 0.7, bp.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Bill number label
+    ctx.fillStyle = '#fff';
+    ctx.font = "bold 9px 'Inter', system-ui";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(bill.billData.billNumber, bp.x, bp.y + bSize + 10);
+
+    // Vote phase: show tally
+    if (bill.phase === 'vote' || (bill.phase === 'resolve' && bill.frameCount < 30)) {
+      const tallyText = `${bill.simYes}-${bill.simNo}`;
+      const tallyColor = bill.simYes > bill.simNo ? '#22c55e' : '#ef4444';
+      ctx.fillStyle = tallyColor;
+      ctx.font = "bold 11px 'Inter', system-ui";
+      ctx.fillText(tallyText, bp.x, bp.y - bSize - 8);
+    }
+
+    ctx.restore();
+  }
+
+  // Draw ripples
+  for (const r of ripples) {
+    ctx.strokeStyle = r.color;
+    ctx.globalAlpha = r.life * 0.4;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, (1 - r.life) * 60 + 10, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  // Draw flashes
+  for (const f of flashes) {
+    ctx.strokeStyle = f.color;
+    ctx.globalAlpha = f.life * 0.6;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, (1 - f.life) * 25 + 5, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  // Mouse indicator
+  if (mouseDown) {
+    ctx.strokeStyle = mouseRight ? 'rgba(255,0,110,0.25)' : 'rgba(58,134,255,0.25)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(mouseX, mouseY, 200, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Population chart
+  if (config.showChart && popHistory.length > 2) {
+    renderPopChart();
+  }
+}
+
+// ── Population Chart ──
+function renderPopChart() {
+  const cw = Math.min(300, W * 0.22);
+  const ch = 90;
+  const cx = 12;
+  const cy = H - ch - 12;
+
+  ctx.fillStyle = 'rgba(8, 8, 16, 0.7)';
+  roundRect(ctx, cx, cy, cw, ch, 8);
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.font = "500 8px 'Space Grotesk', system-ui";
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText('ARCHETYPE DISTRIBUTION', cx + 8, cy + 6);
+
+  const plotX = cx + 4;
+  const plotY = cy + 18;
+  const plotW = cw - 8;
+  const plotH = ch - 22;
+  const len = popHistory.length;
+  if (len < 2) return;
+
+  let maxPop = 1;
+  for (let t = 0; t < len; t++) {
+    let total = 0;
+    for (let s = 0; s < popHistory[t].length; s++) total += popHistory[t][s];
+    if (total > maxPop) maxPop = total;
+  }
+
+  for (let s = NUM_ARCHETYPES - 1; s >= 0; s--) {
+    const rgb = COLORS_RGB[s];
+    ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.35)`;
+    ctx.beginPath();
+    ctx.moveTo(plotX, plotY + plotH);
+    for (let t = 0; t < len; t++) {
+      const x = plotX + (t / (len - 1)) * plotW;
+      let stackedVal = 0;
+      for (let si = 0; si <= s; si++) stackedVal += (popHistory[t][si] || 0);
+      ctx.lineTo(x, plotY + plotH - (stackedVal / maxPop) * plotH);
+    }
+    ctx.lineTo(plotX + plotW, plotY + plotH);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+// ── Hover / Tooltip ──
+function updateHover(ex, ey) {
+  const tooltip = document.getElementById('tooltip');
+  let closest = null;
+  let closestDist = 20; // Max hover distance
+
+  for (let i = 0; i < particles.length; i++) {
+    const p = particles[i];
+    const dx = ex - p.x;
+    const dy = ey - p.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < closestDist) {
+      closestDist = dist;
+      closest = p;
+    }
+  }
+
+  if (closest) {
+    hoveredParticle = closest;
+    let html;
+
+    if (closest.isBill) {
+      // Find the bill state
+      const billState = activeBills.find(b => b.particle === closest);
+      if (billState) {
+        const bd = billState.billData;
+        const typeName = NH_DATA.billTypes[bd.billType]?.name || '?';
+        html = `<span class="tt-name">${bd.billNumber}</span><br>`;
+        html += `<span class="tt-meta">${bd.title}</span><br>`;
+        html += `Type: ${typeName} | ${bd.nhlaPosition === 'support' ? 'Pro-Liberty' : 'Anti-Liberty'}<br>`;
+        if (billState.phase === 'vote' || billState.resolved) {
+          html += `Sim: ${billState.simYes}-${billState.simNo}`;
+          if (bd.yeas) html += ` | Actual: ${bd.yeas}-${bd.nays}`;
+        }
+      }
+    } else {
+      const leg = NH_DATA.legislators[closest.legIndex];
+      if (leg) {
+        const archName = NH_DATA.archetypes[leg.archetype]?.name || '?';
+        html = `<span class="tt-name">${leg.fullName}</span><br>`;
+        html += `<span class="tt-meta">${leg.district} &middot; ${leg.party === 'R' ? 'Republican' : leg.party === 'D' ? 'Democrat' : leg.party}</span><br>`;
+        html += `${archName} &middot; ${leg.grade} (${leg.score}%)`;
+      }
+    }
+
+    if (html) {
+      tooltip.innerHTML = html;
+      tooltip.style.left = (ex + 16) + 'px';
+      tooltip.style.top = (ey - 10) + 'px';
+
+      // Keep tooltip on screen
+      const rect = tooltip.getBoundingClientRect();
+      if (rect.right > W - 10) tooltip.style.left = (ex - rect.width - 10) + 'px';
+      if (rect.bottom > H - 10) tooltip.style.top = (ey - rect.height - 10) + 'px';
+
+      tooltip.classList.add('visible');
+    }
+  } else {
+    hoveredParticle = null;
+    tooltip.classList.remove('visible');
+  }
+}
+
+// ── Replay Mode ──
+function nextBill() {
+  if (replayIndex >= NH_DATA.bills.length - 1) {
+    replayPlaying = false;
+    updatePlayButton();
+    showToast('Session complete! All 108 bills processed.');
+    return;
+  }
+
+  replayIndex++;
+  const billData = NH_DATA.bills[replayIndex];
+  spawnBill(billData, false);
+
+  // Update progress
+  const progress = ((replayIndex + 1) / NH_DATA.bills.length) * 100;
+  document.getElementById('replay-progress').style.width = progress + '%';
+  document.getElementById('replay-progress-label').textContent =
+    `Bill ${replayIndex + 1} of ${NH_DATA.bills.length}`;
+
+  // Show bill card
+  showBillCard(billData);
+
+  // Highlight in feed
+  highlightFeedItem(replayIndex);
+
+  replayWaitFrames = config.billLifeFrames + config.billVoteFrames + config.billResolveFrames + 30;
+}
+
+function showBillCard(bd) {
+  const card = document.getElementById('current-bill-card');
+  card.style.display = 'block';
+  document.getElementById('card-title').textContent = `${bd.billNumber} — ${bd.motion}`;
+  document.getElementById('card-meta').innerHTML =
+    `${bd.title}<br>NHLA: ${bd.nhlaPosition === 'support' ? 'Support' : 'Oppose'} | Type: ${NH_DATA.billTypes[bd.billType]?.name || '?'}`;
+  document.getElementById('card-result').textContent = '';
+  document.getElementById('card-result').className = 'bill-card-result';
+}
+
+function updateBillCard(billState) {
+  const bd = billState.billData;
+  const el = document.getElementById('card-result');
+  const passed = billState.simPassed;
+  el.textContent = `Sim: ${passed ? 'PASSED' : 'FAILED'} (${billState.simYes}-${billState.simNo})` +
+    (bd.outcome ? ` | Actual: ${bd.outcome.toUpperCase()} (${bd.yeas}-${bd.nays})` : '');
+  el.className = 'bill-card-result ' + (passed ? 'passed' : 'failed');
+}
+
+function togglePlay() {
+  replayPlaying = !replayPlaying;
+  updatePlayButton();
+  if (replayPlaying && activeBills.length === 0) {
+    nextBill();
+  }
+}
+
+function updatePlayButton() {
+  const btn = document.getElementById('btn-play');
+  btn.innerHTML = replayPlaying ? '&#10074;&#10074; Pause' : '&#9654; Play';
+  btn.classList.toggle('on', replayPlaying);
+}
+
+function resetReplay() {
+  replayPlaying = false;
+  replayIndex = -1;
+  replayWaitFrames = 0;
+  updatePlayButton();
+
+  // Remove all bill particles
+  for (const bill of activeBills) {
+    removeBillParticle(bill);
+  }
+  activeBills = [];
+
+  // Reset legislator positions
+  createLegislatorParticles();
+  buildRulesMatrix();
+
+  document.getElementById('replay-progress').style.width = '0%';
+  document.getElementById('replay-progress-label').textContent = 'Bill 0 of ' + NH_DATA.bills.length;
+  document.getElementById('current-bill-card').style.display = 'none';
+  buildBillFeed();
+}
+
+function setSpeed(val) {
+  replaySpeed = parseInt(val);
+  document.getElementById('val-speed').textContent = replaySpeed + 'x';
+}
+
+// ── Bill Feed ──
+function buildBillFeed() {
+  const feed = document.getElementById('bill-feed');
+  feed.innerHTML = '';
+  NH_DATA.bills.forEach((b, i) => {
+    const item = document.createElement('div');
+    item.className = 'feed-item';
+    item.id = 'feed-' + i;
+    item.innerHTML = `<span class="feed-dot"></span><span class="feed-num">${b.billNumber}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.title.slice(0, 50)}</span>`;
+    item.onclick = () => {
+      if (activeBills.length === 0 && !replayPlaying) {
+        replayIndex = i - 1;
+        nextBill();
+      }
+    };
+    feed.appendChild(item);
+  });
+}
+
+function highlightFeedItem(idx) {
+  document.querySelectorAll('.feed-item').forEach(el => el.classList.remove('current'));
+  const el = document.getElementById('feed-' + idx);
+  if (el) {
+    el.classList.add('current');
+    el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+}
+
+function updateFeedItem(billState) {
+  const idx = billState.billData.id;
+  const el = document.getElementById('feed-' + idx);
+  if (el) {
+    el.classList.add(billState.simPassed ? 'passed' : 'failed');
+  }
+}
+
+// ── Sandbox Mode ──
+function buildSandboxUI() {
+  // Template buttons
+  const templateRow = document.getElementById('template-btns');
+  templateRow.innerHTML = '';
+  NH_DATA.billTypes.forEach((bt, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'btn';
+    btn.textContent = bt.name;
+    btn.style.borderLeft = `3px solid ${bt.color}`;
+    btn.onclick = () => loadTemplate(i);
+    templateRow.appendChild(btn);
+  });
+
+  // Archetype reaction sliders
+  const container = document.getElementById('archetype-sliders');
+  container.innerHTML = '';
+  NH_DATA.archetypes.forEach((arch, i) => {
+    const div = document.createElement('div');
+    div.className = 'archetype-slider';
+    div.innerHTML = `
+      <div class="archetype-slider-header">
+        <div class="archetype-dot" style="background:${arch.color}"></div>
+        <span class="archetype-slider-name">${arch.name}</span>
+        <span class="archetype-slider-val" id="sandbox-val-${i}">0.00</span>
+      </div>
+      <input type="range" id="sandbox-sl-${i}" min="-1" max="1" step="0.05" value="0"
+             oninput="document.getElementById('sandbox-val-${i}').textContent=parseFloat(this.value).toFixed(2)">
+    `;
+    container.appendChild(div);
+  });
+}
+
+function loadTemplate(typeIdx) {
+  const bt = NH_DATA.billTypes[typeIdx];
+  if (!bt) return;
+  bt.centroidReaction.forEach((val, i) => {
+    const sl = document.getElementById('sandbox-sl-' + i);
+    if (sl) {
+      sl.value = val;
+      document.getElementById('sandbox-val-' + i).textContent = val.toFixed(2);
+    }
+  });
+  showToast('Loaded template: ' + bt.name);
+}
+
+function dropHypotheticalBill() {
+  // Read slider values
+  const reactions = [];
+  for (let i = 0; i < NUM_ARCHETYPES; i++) {
+    const sl = document.getElementById('sandbox-sl-' + i);
+    reactions.push(parseFloat(sl.value));
+  }
+
+  const weight = parseFloat(document.getElementById('sl-weight').value);
+
+  // Find the closest bill type
+  let bestType = 0;
+  let bestDist = Infinity;
+  NH_DATA.billTypes.forEach((bt, i) => {
+    let dist = 0;
+    bt.centroidReaction.forEach((v, j) => {
+      const d = v - reactions[j];
+      dist += d * d;
+    });
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestType = i;
+    }
+  });
+
+  // Bills spawn from the podium — position is computed by spawnBill
+  const billData = {
+    id: 1000 + Math.random() * 1000 | 0,
+    billNumber: 'HYP-' + (activeBills.filter(b => b.isHypothetical).length + 1),
+    title: 'Hypothetical Bill',
+    motion: 'Custom',
+    nhlaPosition: reactions[0] > 0 ? 'support' : 'oppose',
+    outcome: '',
+    billType: bestType,
+    archetypeReaction: reactions,
+    bx: 0.5, // Not used — spawnBill places from podium
+    by: 0.1,
+    yeas: 0,
+    nays: 0,
+    weight: weight,
+  };
+
+  spawnBill(billData, true);
+  showToast('Dropped hypothetical bill');
+}
+
+function clearHypotheticals() {
+  for (let i = activeBills.length - 1; i >= 0; i--) {
+    if (activeBills[i].isHypothetical) {
+      removeBillParticle(activeBills[i]);
+      activeBills.splice(i, 1);
+    }
+  }
+  showToast('Cleared hypothetical bills');
+}
+
+// ── Mode Switching ──
+function setMode(mode) {
+  replayMode = mode;
+  document.getElementById('btn-replay').classList.toggle('active', mode === 'replay');
+  document.getElementById('btn-sandbox').classList.toggle('active', mode === 'sandbox');
+  document.getElementById('replay-section').style.display = mode === 'replay' ? 'block' : 'none';
+  document.getElementById('sandbox-section').style.display = mode === 'sandbox' ? 'block' : 'none';
+
+  if (mode === 'sandbox') {
+    replayPlaying = false;
+    updatePlayButton();
+  }
+}
+
+// ── Physics UI ──
+function updatePhysics(key, value) {
+  const v = parseFloat(value);
+  switch(key) {
+    case 'range':
+      config.range = v;
+      document.getElementById('val-range').textContent = v;
+      break;
+    case 'force':
+      config.force = v;
+      document.getElementById('val-force').textContent = v.toFixed(1);
+      break;
+    case 'friction':
+      config.friction = v;
+      document.getElementById('val-friction').textContent = v.toFixed(2);
+      break;
+  }
+}
+
+// ── Legend ──
+function buildLegend() {
+  const el = document.getElementById('legend');
+  el.innerHTML = '';
+  const counts = new Array(NUM_ARCHETYPES).fill(0);
+  for (const p of particles) {
+    if (!p.isBill && p.species < NUM_ARCHETYPES) counts[p.species]++;
+  }
+
+  NH_DATA.archetypes.forEach((arch, i) => {
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+    item.innerHTML = `<div class="legend-dot" style="background:${arch.color}"></div>${arch.name}<span class="legend-count">${counts[i]}</span>`;
+    el.appendChild(item);
+  });
+}
+
+// ── Toast ──
+let toastTimer = null;
+function showToast(message) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.classList.add('visible');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toast.classList.remove('visible');
+    toastTimer = null;
+  }, 3000);
+}
+
+// ── Toggle Panel ──
+function togglePanel() {
+  const panel = document.getElementById('panel');
+  const btn = document.getElementById('toggle-panel');
+  panel.classList.toggle('hidden');
+  btn.style.display = panel.classList.contains('hidden') ? 'block' : 'none';
+}
+
+// ── Welcome ──
+function dismissWelcome() {
+  document.getElementById('welcome-overlay').classList.remove('visible');
+}
+
+// ── FPS + Stats ──
+let frameCount = 0;
+let lastFpsTime = performance.now();
+let currentFps = 60;
+
+function updateStats() {
+  frameCount++;
+  const now = performance.now();
+  if (now - lastFpsTime >= 500) {
+    currentFps = Math.round(frameCount / ((now - lastFpsTime) / 1000));
+    frameCount = 0;
+    lastFpsTime = now;
+    document.getElementById('fps-display').textContent = currentFps + ' fps';
+
+    const legCount = particles.filter(p => !p.isBill).length;
+    const billCount = activeBills.length;
+    document.getElementById('particle-count').textContent =
+      legCount + ' reps' + (billCount ? ` + ${billCount} bill${billCount > 1 ? 's' : ''}` : '');
+  }
+}
+
+// ── Main Loop ──
+function loop() {
+  if (!paused) step();
+  render();
+  updateStats();
+  requestAnimationFrame(loop);
+}
+
+// ── Event Listeners ──
+window.addEventListener('resize', resize);
+
+canvas.addEventListener('mousedown', (e) => {
+  mouseDown = true;
+  mouseRight = e.button === 2;
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+});
+canvas.addEventListener('mousemove', (e) => {
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+  if (!mouseDown) updateHover(e.clientX, e.clientY);
+});
+canvas.addEventListener('mouseup', () => { mouseDown = false; });
+canvas.addEventListener('mouseleave', () => {
+  mouseDown = false;
+  document.getElementById('tooltip').classList.remove('visible');
+});
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  mouseDown = true;
+  mouseRight = false;
+  mouseX = e.touches[0].clientX;
+  mouseY = e.touches[0].clientY;
+}, { passive: false });
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  mouseX = e.touches[0].clientX;
+  mouseY = e.touches[0].clientY;
+}, { passive: false });
+canvas.addEventListener('touchend', () => { mouseDown = false; });
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  switch (e.key.toLowerCase()) {
+    case ' ':
+      e.preventDefault();
+      paused = !paused;
+      showToast(paused ? 'Paused' : 'Resumed');
+      break;
+    case 'n':
+      if (replayMode === 'replay') nextBill();
+      break;
+    case 'r':
+      resetReplay();
+      break;
+    case 'tab':
+      e.preventDefault();
+      togglePanel();
+      break;
+  }
+});
+
+// ── Init ──
+resize();
+buildRulesMatrix();
+createLegislatorParticles();
+buildBillFeed();
+buildLegend();
+buildSandboxUI();
+
+// Show welcome
+document.getElementById('welcome-overlay').classList.add('visible');
+if (localStorage.getItem('nhLegSim_visited')) {
+  setTimeout(dismissWelcome, 3000);
+} else {
+  localStorage.setItem('nhLegSim_visited', '1');
+}
+
+loop();
+</script>
+</body>
+</html>
