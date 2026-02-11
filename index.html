@@ -627,16 +627,16 @@ const ctx = canvas.getContext('2d');
 
 // ── Configuration ──
 const config = {
-  range: 100,
-  force: 0.25,
-  friction: 0.20,
-  repulsionRadius: 28,
+  range: 180,
+  force: 0.20,
+  friction: 0.25,
+  repulsionRadius: 20,
   size: 2.8,
-  billSize: 8,
+  billSize: 12,
   trailFade: 0.06,
   glow: true,
   showChart: true,
-  influenceRadius: 140,
+  influenceRadius: 220,
   billLifeFrames: 420,
   billVoteFrames: 60,
   billResolveFrames: 90,
@@ -757,83 +757,54 @@ function resize() {
   H = canvas.height = window.innerHeight;
 }
 
-// Hemicycle layout: legislators arranged in a semicircular chamber
-// Left = progressive, Right = liberty, like a real legislature
-// Bills enter from the "podium" at top-center with downward momentum
-const HEMI_ORDER = [5, 4, 3, 2, 1, 0]; // Left→Right: PR, BD, ES, SC, FC, LH
+// Political Compass layout: legislators placed by their PCA voting positions
+// X = partisan dimension (progressive left, liberty right)
+// Y = secondary dimension (from PCA component 2)
+// Bills drop from above as heavy weights and pull legislators toward them
 
-function getHemicycleCenter() {
-  return { x: W / 2, y: H * 0.62 };
+// Compass bounds: the usable area for the political grid
+function getCompassBounds() {
+  const panelW = 260; // right panel width
+  const margin = 80;
+  return {
+    left: margin,
+    right: W - panelW - margin,
+    top: margin + 48, // below top bar
+    bottom: H - margin,
+  };
 }
-function getHemicycleRadius() {
-  return Math.min(W, H) * 0.32;
+
+function getDropPos() {
+  const b = getCompassBounds();
+  return { x: (b.left + b.right) / 2, y: b.top - 30 };
 }
-function getPodiumPos() {
-  return { x: W / 2, y: H * 0.08 };
+
+// Convert PCA normalized coords (0-1) to canvas coords
+function pcaToCanvas(px, py) {
+  const b = getCompassBounds();
+  return {
+    x: b.left + px * (b.right - b.left),
+    y: b.top + py * (b.bottom - b.top),
+  };
 }
 
 function createLegislatorParticles() {
   particles = [];
 
-  const center = getHemicycleCenter();
-  const baseRadius = getHemicycleRadius();
-
-  // Count members per archetype for row allocation
-  const counts = new Array(NUM_ARCHETYPES).fill(0);
-  NH_DATA.legislators.forEach(l => counts[l.archetype]++);
-
-  // Assign angular center for each archetype
-  // Arc from π (left) to 0 (right), each archetype gets an equal wedge
-  const sliceAngle = Math.PI / HEMI_ORDER.length;
-  const archetypeAngle = {};
-  HEMI_ORDER.forEach((archIdx, i) => {
-    archetypeAngle[archIdx] = Math.PI - (i + 0.5) * sliceAngle;
-  });
-
-  // Track how many of each archetype we've placed (for row stacking)
-  const placed = new Array(NUM_ARCHETYPES).fill(0);
-
   NH_DATA.legislators.forEach((leg, i) => {
-    const archIdx = leg.archetype;
-    const centerAngle = archetypeAngle[archIdx];
-    const count = counts[archIdx];
-    const idx = placed[archIdx]++;
-
-    // Arrange in concentric rows within the wedge
-    const cols = Math.ceil(Math.sqrt(count * 1.5));
-    const row = Math.floor(idx / cols);
-    const col = idx % cols;
-    const totalRows = Math.ceil(count / cols);
-
-    // Radial position: spread across rows from inner to outer
-    const radialSpread = baseRadius * 0.45;
-    const innerR = baseRadius - radialSpread * 0.5;
-    const r = innerR + (totalRows > 1 ? (row / (totalRows - 1)) * radialSpread : 0);
-
-    // Angular position: spread across columns within the wedge
-    const wedgeWidth = sliceAngle * 0.82;
-    const colsInRow = Math.min(cols, count - row * cols);
-    const angOffset = colsInRow > 1 ? (col / (colsInRow - 1) - 0.5) * wedgeWidth : 0;
-    const angle = centerAngle + angOffset;
-
-    // Add jitter for organic look
-    const jitterR = (Math.random() - 0.5) * 12;
-    const jitterA = (Math.random() - 0.5) * 0.04;
-
-    const finalR = r + jitterR;
-    const finalA = angle + jitterA;
-
-    const homeX = center.x + Math.cos(finalA) * finalR;
-    const homeY = center.y - Math.sin(finalA) * finalR;
+    const jitter = 8;
+    const pos = pcaToCanvas(leg.px, leg.py);
+    const homeX = pos.x + (Math.random() - 0.5) * jitter;
+    const homeY = pos.y + (Math.random() - 0.5) * jitter;
 
     particles.push({
       x: homeX,
       y: homeY,
       homeX: homeX,
       homeY: homeY,
-      vx: (Math.random() - 0.5) * 0.15,
-      vy: (Math.random() - 0.5) * 0.15,
-      species: archIdx,
+      vx: 0,
+      vy: 0,
+      species: leg.archetype,
       isBill: false,
       legIndex: i,
     });
@@ -886,8 +857,8 @@ function step() {
         force = attraction * (1 - Math.abs(dist - midDist) / halfWidth);
       }
 
-      // Bills get stronger forces — they're the main attractor/repulsor
-      const billBoost = (p.isBill || q.isBill) ? 3.0 : 1.0;
+      // Bills are HEAVY WEIGHTS — massive gravitational pull on legislators
+      const billBoost = (p.isBill || q.isBill) ? 5.0 : 1.0;
 
       fx += (dx / dist) * force * billBoost;
       fy += (dy / dist) * force * billBoost;
@@ -905,13 +876,20 @@ function step() {
       }
     }
 
-    // Anchor spring: gently pull legislators toward hemicycle home positions
-    // Weaker when bills are active so particles visibly react to legislation
-    if (!p.isBill && p.homeX !== undefined) {
-      const hasBills = activeBills.length > 0;
-      const anchorStrength = hasBills ? 0.004 : 0.014;
-      fx += (p.homeX - p.x) * anchorStrength;
-      fy += (p.homeY - p.y) * anchorStrength;
+    // Anchor spring: pull particles toward their home positions
+    if (p.homeX !== undefined) {
+      if (p.isBill) {
+        // Bills anchor HARD to their landing position (they're heavy weights, they don't move)
+        const billAnchor = 0.05;
+        fx += (p.homeX - p.x) * billAnchor;
+        fy += (p.homeY - p.y) * billAnchor;
+      } else {
+        // Legislators: weak anchor when bills active (so they get pulled), strong when idle
+        const hasBills = activeBills.length > 0;
+        const anchorStrength = hasBills ? 0.003 : 0.016;
+        fx += (p.homeX - p.x) * anchorStrength;
+        fy += (p.homeY - p.y) * anchorStrength;
+      }
     }
 
     p.vx = (p.vx + fx * forceMul * range) * friction;
@@ -974,37 +952,37 @@ function spawnBill(billData, isHypothetical) {
   const billSpecies = NUM_ARCHETYPES + billData.billType;
 
   // Set rules for this bill's interactions
+  // Bills are heavy weights — strong attraction for supporters, repulsion for opponents
   const reactions = billData.archetypeReaction;
   const weight = billData.weight || 1;
-  const scaleFactor = Math.min(1.5, 0.5 + weight * 0.25);
+  const scaleFactor = Math.min(2.0, 0.6 + weight * 0.4);
 
   for (let arch = 0; arch < NUM_ARCHETYPES; arch++) {
     const r = reactions[arch] * scaleFactor;
-    // How archetype reacts to bill
+    // How archetype reacts to bill (strong — this is the gravity well)
     rules[arch][billSpecies] = r;
-    // How bill reacts to archetype (attracted to supporters, repelled from opponents)
-    rules[billSpecies][arch] = r * 0.6;
+    // Bill doesn't chase legislators — it stays planted like a weight
+    rules[billSpecies][arch] = 0;
   }
 
-  // Bills spawn from the podium (top center) with downward momentum
-  // They drift into the chamber and get pulled toward their supporters
-  const podium = getPodiumPos();
-  const center = getHemicycleCenter();
+  // Bill lands at its natural political compass position (from PCA of supporting legislators)
+  const landingPos = pcaToCanvas(billData.bx, billData.by);
+  const dropPos = getDropPos();
 
-  // Compute a horizontal bias from the reaction vector:
-  // positive reactions from right-leaning archetypes → drift right, etc.
-  const sliceAngle = Math.PI / HEMI_ORDER.length;
-  let xBias = 0;
-  HEMI_ORDER.forEach((archIdx, i) => {
-    const angle = Math.PI - (i + 0.5) * sliceAngle;
-    xBias += Math.cos(angle) * (reactions[archIdx] || 0);
-  });
+  // Compute velocity to arrive at landing position during active phase
+  // Drop from above, arc toward landing spot
+  const dropTime = 90; // frames to reach landing area
+  const vx = (landingPos.x - dropPos.x) / dropTime;
+  const vy = (landingPos.y - dropPos.y) / dropTime;
 
   const billParticle = {
-    x: podium.x + (Math.random() - 0.5) * 30,
-    y: podium.y,
-    vx: xBias * 0.6, // Drift toward supporting side
-    vy: 2.5, // Downward momentum into the chamber
+    x: dropPos.x,
+    y: dropPos.y,
+    vx: vx,
+    vy: vy,
+    // Bill anchors to its landing position after arriving
+    homeX: landingPos.x,
+    homeY: landingPos.y,
     species: billSpecies,
     isBill: true,
     billId: billData.id,
@@ -1065,26 +1043,30 @@ function countVotes(bill) {
   const influenceR = config.influenceRadius;
   let yes = 0, no = 0;
 
-  // Use the original bill archetype reactions for vote counting
-  // This is more accurate than physics-based rules (which are scaled)
-  const reactions = bill.billData.archetypeReaction;
-
+  // Physics-based voting: if a legislator got pulled closer to the bill
+  // than their home position, they were attracted → vote yes.
+  // If they stayed put or moved away → vote no.
+  // This means what you SEE is the actual vote.
   for (let i = 0; i < particles.length; i++) {
     const p = particles[i];
-    if (p.isBill) continue;
+    if (p.isBill || p.homeX === undefined) continue;
 
-    const archReaction = reactions[p.species] || 0;
-
-    // Primary: vote based on archetype affinity (the real data)
-    // Secondary: proximity provides a small bonus/penalty
+    // Distance from current position to bill
     const dx = p.x - bp.x;
     const dy = p.y - bp.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const proximityBonus = dist < influenceR ? 0.15 : -0.05;
+    const distToBill = Math.sqrt(dx * dx + dy * dy);
 
-    const voteScore = archReaction + proximityBonus;
+    // Distance from home position to bill
+    const hdx = p.homeX - bp.x;
+    const hdy = p.homeY - bp.y;
+    const homeDistToBill = Math.sqrt(hdx * hdx + hdy * hdy);
 
-    if (voteScore > 0) {
+    // Did this legislator move toward the bill? (got pulled in)
+    const movedCloser = distToBill < homeDistToBill - 3; // 3px threshold
+    // Or are they simply within the influence radius?
+    const inRange = distToBill < influenceR;
+
+    if (movedCloser || inRange) {
       yes++;
     } else {
       no++;
@@ -1163,34 +1145,50 @@ function render() {
   ctx.fillStyle = `rgba(10, 10, 15, ${config.trailFade})`;
   ctx.fillRect(0, 0, W, H);
 
-  // Draw chamber structure (faint hemicycle arc + podium)
-  const hCenter = getHemicycleCenter();
-  const hRadius = getHemicycleRadius();
-  const podium = getPodiumPos();
+  // Draw political compass grid
+  const cb = getCompassBounds();
+  const cx = (cb.left + cb.right) / 2;
+  const cy = (cb.top + cb.bottom) / 2;
 
-  // Hemicycle arc (faint)
-  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  // Crosshairs (axis lines)
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.arc(hCenter.x, hCenter.y, hRadius - hRadius * 0.22, 0, Math.PI);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(hCenter.x, hCenter.y, hRadius + hRadius * 0.22, 0, Math.PI);
+  ctx.moveTo(cb.left, cy);
+  ctx.lineTo(cb.right, cy);
+  ctx.moveTo(cx, cb.top);
+  ctx.lineTo(cx, cb.bottom);
   ctx.stroke();
 
-  // Podium marker (where bills enter)
-  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  // Outer border
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.strokeRect(cb.left, cb.top, cb.right - cb.left, cb.bottom - cb.top);
+
+  // Axis labels (very faint)
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.font = "10px 'Inter', system-ui";
+  ctx.textAlign = 'center';
+  ctx.fillText('← Progressive', cb.left + 60, cy - 6);
+  ctx.fillText('Liberty →', cb.right - 50, cy - 6);
+  ctx.textBaseline = 'middle';
+  ctx.save();
+  ctx.translate(cx + 8, cb.top + 40);
+  ctx.fillText('▲', 0, 0);
+  ctx.restore();
+  ctx.save();
+  ctx.translate(cx + 8, cb.bottom - 30);
+  ctx.fillText('▼', 0, 0);
+  ctx.restore();
+
+  // Drop zone indicator (where bills enter from)
+  const drop = getDropPos();
+  ctx.fillStyle = 'rgba(255,255,255,0.04)';
   ctx.beginPath();
-  ctx.arc(podium.x, podium.y, 6, 0, Math.PI * 2);
+  ctx.moveTo(drop.x - 8, drop.y);
+  ctx.lineTo(drop.x, drop.y + 10);
+  ctx.lineTo(drop.x + 8, drop.y);
+  ctx.closePath();
   ctx.fill();
-  // Faint line from podium to chamber
-  ctx.strokeStyle = 'rgba(255,255,255,0.025)';
-  ctx.setLineDash([4, 8]);
-  ctx.beginPath();
-  ctx.moveTo(podium.x, podium.y + 8);
-  ctx.lineTo(hCenter.x, hCenter.y - hRadius * 0.3);
-  ctx.stroke();
-  ctx.setLineDash([]);
 
   const size = config.size;
   const glow = config.glow;
@@ -1634,7 +1632,16 @@ function dropHypotheticalBill() {
     }
   });
 
-  // Bills spawn from the podium — position is computed by spawnBill
+  // Compute where this bill lands on the compass based on who supports it
+  let wx = 0, wy = 0, wt = 0;
+  NH_DATA.legislators.forEach((leg) => {
+    const r = reactions[leg.archetype];
+    const w = Math.max(0, r);
+    wx += leg.px * w;
+    wy += leg.py * w;
+    wt += w;
+  });
+
   const billData = {
     id: 1000 + Math.random() * 1000 | 0,
     billNumber: 'HYP-' + (activeBills.filter(b => b.isHypothetical).length + 1),
@@ -1644,8 +1651,8 @@ function dropHypotheticalBill() {
     outcome: '',
     billType: bestType,
     archetypeReaction: reactions,
-    bx: 0.5, // Not used — spawnBill places from podium
-    by: 0.1,
+    bx: wt > 0 ? wx / wt : 0.5,
+    by: wt > 0 ? wy / wt : 0.5,
     yeas: 0,
     nays: 0,
     weight: weight,
