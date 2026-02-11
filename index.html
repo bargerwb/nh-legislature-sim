@@ -569,16 +569,16 @@ input[type="range"]::-webkit-slider-thumb {
 
   <div class="section-title">Physics</div>
   <div class="slider-group">
-    <div class="slider-label"><span>Interaction Range</span><span id="val-range">100</span></div>
-    <input type="range" id="sl-range" min="40" max="200" step="5" value="100" oninput="updatePhysics('range', this.value)">
+    <div class="slider-label"><span>Interaction Range</span><span id="val-range">180</span></div>
+    <input type="range" id="sl-range" min="40" max="200" step="5" value="180" oninput="updatePhysics('range', this.value)">
   </div>
   <div class="slider-group">
-    <div class="slider-label"><span>Force Strength</span><span id="val-force">0.25</span></div>
-    <input type="range" id="sl-force" min="0.1" max="2.0" step="0.05" value="0.25" oninput="updatePhysics('force', this.value)">
+    <div class="slider-label"><span>Force Strength</span><span id="val-force">0.20</span></div>
+    <input type="range" id="sl-force" min="0.1" max="2.0" step="0.05" value="0.20" oninput="updatePhysics('force', this.value)">
   </div>
   <div class="slider-group">
-    <div class="slider-label"><span>Friction</span><span id="val-friction">0.20</span></div>
-    <input type="range" id="sl-friction" min="0.01" max="0.4" step="0.01" value="0.20" oninput="updatePhysics('friction', this.value)">
+    <div class="slider-label"><span>Friction</span><span id="val-friction">0.25</span></div>
+    <input type="range" id="sl-friction" min="0.01" max="0.4" step="0.01" value="0.25" oninput="updatePhysics('friction', this.value)">
   </div>
 
   <div class="section-title">Visuals</div>
@@ -1040,41 +1040,44 @@ function updateBills() {
 
 function countVotes(bill) {
   const bp = bill.particle;
-  const influenceR = config.influenceRadius;
+  const reactions = bill.billData.archetypeReaction; // [-1, +1] per archetype
   let yes = 0, no = 0;
 
-  // Physics-based voting: if a legislator got pulled closer to the bill
-  // than their home position, they were attracted → vote yes.
-  // If they stayed put or moved away → vote no.
-  // This means what you SEE is the actual vote.
+  // Hybrid voting: archetype reaction data determines HOW MANY of each group
+  // vote yes (using fractional sum for precision). Physics determines WHICH
+  // individuals — closest to the bill are the yes voters, matching the visual.
+
+  // Group legislators by archetype, measuring distance to bill
+  const byArchetype = new Array(NUM_ARCHETYPES).fill(null).map(() => []);
   for (let i = 0; i < particles.length; i++) {
     const p = particles[i];
-    if (p.isBill || p.homeX === undefined) continue;
-
-    // Distance from current position to bill
+    if (p.isBill) continue;
     const dx = p.x - bp.x;
     const dy = p.y - bp.y;
-    const distToBill = Math.sqrt(dx * dx + dy * dy);
-
-    // Distance from home position to bill
-    const hdx = p.homeX - bp.x;
-    const hdy = p.homeY - bp.y;
-    const homeDistToBill = Math.sqrt(hdx * hdx + hdy * hdy);
-
-    // Did this legislator move toward the bill? (got pulled in)
-    const movedCloser = distToBill < homeDistToBill - 3; // 3px threshold
-    // Or are they simply within the influence radius?
-    const inRange = distToBill < influenceR;
-
-    if (movedCloser || inRange) {
-      yes++;
-    } else {
-      no++;
-    }
+    byArchetype[p.species].push(Math.sqrt(dx * dx + dy * dy));
   }
 
-  bill.simYes = yes;
-  bill.simNo = no;
+  // Compute NHLA-aligned count using fractional sum (round once for precision)
+  let fracAligned = 0;
+  for (let arch = 0; arch < NUM_ARCHETYPES; arch++) {
+    const dists = byArchetype[arch];
+    if (dists.length === 0) continue;
+    const reaction = reactions[arch];
+    const alignedFraction = Math.max(0, Math.min(1, (reaction + 1) / 2));
+    fracAligned += alignedFraction * dists.length;
+    // Sort by distance — closest to bill are the aligned voters (visual consistency)
+    dists.sort((a, b) => a - b);
+  }
+
+  const aligned = Math.round(fracAligned);
+  const opposed = 400 - aligned;
+
+  // Convert NHLA alignment to actual yeas/nays:
+  // NHLA supports → aligned = yeas, opposed = nays
+  // NHLA opposes → aligned = nays (they voted to kill it), opposed = yeas
+  const nhlaSupports = bill.billData.nhlaPosition === 'support';
+  bill.simYes = nhlaSupports ? aligned : opposed;
+  bill.simNo = nhlaSupports ? opposed : aligned;
 }
 
 function resolveBill(bill) {
@@ -1647,7 +1650,7 @@ function dropHypotheticalBill() {
     billNumber: 'HYP-' + (activeBills.filter(b => b.isHypothetical).length + 1),
     title: 'Hypothetical Bill',
     motion: 'Custom',
-    nhlaPosition: reactions[0] > 0 ? 'support' : 'oppose',
+    nhlaPosition: 'support', // Sandbox sliders are direct yea/nay reaction, not NHLA alignment
     outcome: '',
     billType: bestType,
     archetypeReaction: reactions,
